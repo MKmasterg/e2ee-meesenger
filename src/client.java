@@ -86,7 +86,7 @@ public class Client {
 
             // Main menu loop
             while (true) {
-                System.out.println("\nChoose: [1] Register  [2] Login  [3] SessionID  [4] Send Message  [5] Quit");
+                System.out.println("\nChoose: [1] Register  [2] Login  [3] Send Message  [4] Quit");
                 String choice = scanner.nextLine().trim();
 
                 if (choice.equals("1")) {
@@ -137,20 +137,13 @@ public class Client {
                     System.out.println("[Server] " + response);
                     if (response != null && response.startsWith("login_ok,sessionID:")) {
                         sessionID = response.split("sessionID:")[1];
-                        System.out.println("[Client] SessionID set: " + sessionID);
+                        System.out.println("[Client] SessionID set.");
                     }
 
                 } else if (choice.equals("3")) {
-                    // SessionID authentication
-                    System.out.print("SessionID: ");
-                    sessionID = scanner.nextLine().trim();
-                    String sessionMsg = String.format("type:session,sessionID:%s", sessionID);
-                    out.println(sessionMsg);
-
-                } else if (choice.equals("4")) {
                     // Send message
                     if (sessionID == null) {
-                        System.out.println("[Client] You must login or provide a sessionID first.");
+                        System.out.println("[Client] You must login first.");
                         continue;
                     }
                     System.out.print("Target username: ");
@@ -179,7 +172,7 @@ public class Client {
                     String msg = String.format("type:message,sessionID:%s,targetUsername:%s,message:%s", sessionID, targetUser, encryptedMsg);
                     out.println(msg);
 
-                } else if (choice.equals("5") || choice.equalsIgnoreCase("/quit")) {
+                } else if (choice.equals("4") || choice.equalsIgnoreCase("/quit")) {
                     out.println("type:logout");
                     break;
                 } else {
