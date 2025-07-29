@@ -3,7 +3,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.security.KeyPair;
 
-public class Utils {
+public class EncryptionUtils {
     public static byte[] generateSalt(int length) {
         SecureRandom sr = new SecureRandom();
         byte[] salt = new byte[length];
@@ -15,7 +15,7 @@ public class Utils {
 
         try {
             // Generate a random salt
-            byte[] salt = Utils.generateSalt(16);
+            byte[] salt = EncryptionUtils.generateSalt(16);
 
             // Combine password and salt
             MessageDigest md = MessageDigest.getInstance("SHA-256");
