@@ -58,6 +58,36 @@ public class Utils {
         }
     }
 
+    public static void registerUser(String username, String passwordHashBase64, String saltBase64, String publicKeyBase64) throws Exception {
+        if (username == null || username.trim().isEmpty()) {
+            throw new IllegalArgumentException("Username cannot be empty.");
+        }
+        if (passwordHashBase64 == null || passwordHashBase64.isEmpty() ||
+            saltBase64 == null || saltBase64.isEmpty() ||
+            publicKeyBase64 == null || publicKeyBase64.isEmpty()) {
+            throw new IllegalArgumentException("Password, salt, and public key must be provided.");
+        }
+        // Check if user already exists
+        String checkSql = "SELECT 1 FROM users WHERE username = ?";
+        try (Connection conn = connect();
+             PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
+            checkStmt.setString(1, username);
+            try (ResultSet rs = checkStmt.executeQuery()) {
+                if (rs.next()) {
+                    throw new IllegalStateException("Username already exists.");
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new Exception("Database error during user check.", e);
+        }
+        // Try to add user
+        boolean success = addUser(username, passwordHashBase64, saltBase64, publicKeyBase64);
+        if (!success) {
+            throw new Exception("Failed to register user due to database error.");
+        }
+    }
+
     public static String[] getPasswordAndSalt(String username) {
         String sql = "SELECT passwordhashed, salt FROM users WHERE username = ?";
         try (Connection conn = connect();
