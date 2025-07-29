@@ -23,6 +23,18 @@ public class ClientHandler implements Runnable {
         this.dbUrl = dbUrl;
         this.clients = clients;
     }
+    private Map<String, String> parseMessage(String line) {
+            Map<String, String> map = new ConcurrentHashMap<>();
+            if (line == null || line.trim().isEmpty()) return map;
+            String[] pairs = line.split(",");
+            for (String pair : pairs) {
+                String[] kv = pair.split(":", 2);
+                if (kv.length == 2) {
+                    map.put(kv[0].trim(), kv[1].trim());
+                }
+            }
+            return map;
+    }
     
     @Override
     public void run() {
