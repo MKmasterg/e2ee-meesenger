@@ -88,6 +88,20 @@ public class Utils {
         }
     }
 
+    public static String loginUser(String username, String password) throws Exception {
+        String[] stored = getPasswordAndSalt(username);
+        if (stored == null) {
+            throw new IllegalArgumentException("User not found.");
+        }
+        String passwordHash = stored[0];
+        String salt = stored[1];
+        // Hash the provided password with the stored salt
+        String hashedInput = enc.EncryptionUtils.hashedPasswordWithSalt(password, salt);
+        if (hashedInput.equals(passwordHash)) {
+            return createSession(username);
+        }
+        throw new IllegalArgumentException("Invalid password.");
+    }
     public static String[] getPasswordAndSalt(String username) {
         String sql = "SELECT passwordhashed, salt FROM users WHERE username = ?";
         try (Connection conn = connect();

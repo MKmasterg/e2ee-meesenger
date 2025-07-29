@@ -8,6 +8,8 @@ import java.sql.DriverManager;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import enc.EncryptionUtils;
+
 public class ClientHandler implements Runnable {
     private Socket socket;
     private String dbUrl;
@@ -38,13 +40,13 @@ public class ClientHandler implements Runnable {
 
                 switch (type) {
                     case "register":
-                        handleRegister(conn, msg);
+                        handleRegister(msg);
                         break;
                     case "login":
-                        handleLogin(conn, msg);
+                        handleLogin(msg);
                         break;
                     case "get_key":
-                        handleGetKey(conn, msg);
+                        handleGetKey(msg);
                         break;
                     case "message":
                         handleMessage(msg);
@@ -63,7 +65,27 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void handleRegister(Connection conn, Map<String, String> msg) {
+    private String handleLogin(Map<String, String> msg) {
+        String username = msg.get("username");
+        String password = msg.get("password");
+
+        if (username == null || password == null) {
+            out.println("Invalid login data.");
+            return null;
+        }
+
+        String sessionID = null;
+        
+        try {
+            sessionID = db.server.Utils.loginUser(username, password);
+            return sessionID;
+        } catch (Exception e) {
+            out.println("Error during login: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private void handleRegister(Map<String, String> msg) {
         String username = msg.get("username");
         String password = msg.get("password");
 
