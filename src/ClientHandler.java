@@ -45,9 +45,6 @@ public class ClientHandler implements Runnable {
                     case "login":
                         handleLogin(msg);
                         break;
-                    case "get_key":
-                        handleGetKey(msg);
-                        break;
                     case "message":
                         handleMessage(msg);
                         break;
@@ -65,24 +62,37 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private String handleGetKey(Map<String, String> msg) {
+    private void handleMessage(Map<String, String> msg) {
         String sessionID = msg.get("sessionID");
-        String username = msg.get("username");
-        if (sessionID == null) {
-            out.println("Invalid session ID.");
-            return null;
+        String targetUsername = msg.get("targetUsername");
+        String encryptedMessage = msg.get("message");
+
+        if (sessionID == null || targetUsername == null || encryptedMessage == null) {
+            out.println("Invalid message format.");
+            return;
         }
 
+        // Validate session and check if target user is online
         try {
-            String publicKey = db.server.Utils.getPublicKeyIfSessionValid(sessionID, username);
-            if (publicKey != null) {
-                return publicKey;
-            } 
+            boolean validSession = db.server.Utils.validateSession(sessionID);
+            if (!validSession) {
+                out.println("Invalid session.");
+                return;
+            }
+
+            ClientHandler targetHandler = clients.get(targetUsername);
+            if (targetHandler != null) {
+                // Forward the encrypted message to the target user
+                targetHandler.out.println(username + ":" + encryptedMessage);
+                out.println("Message delivered.");
+            } else {
+                out.println("User not online.");
+            }
         } catch (Exception e) {
-            out.println("Error retrieving public key: " + e.getMessage());
+            out.println("Error handling message: " + e.getMessage());
         }
-        return null;
     }
+
 
     private String handleLogin(Map<String, String> msg) {
         String username = msg.get("username");

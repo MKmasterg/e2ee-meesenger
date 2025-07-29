@@ -129,13 +129,13 @@ public class Utils {
     }
 
     // Validate session and return username if valid, else null
-    public static String validateSession(String sessionId) {
+    public static boolean validateSession(String sessionId) {
         SessionInfo info = sessions.get(sessionId);
         if (info != null && info.expiresAt > System.currentTimeMillis()) {
-            return info.username;
+            return true;
         }
         sessions.remove(sessionId); // Remove expired session
-        return null;
+        return false;
     }
 
     public static String getPublicKeyIfSessionValid(String sessionId, String targetUsername) throws Exception {
