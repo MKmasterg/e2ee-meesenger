@@ -36,41 +36,103 @@ public class ClientHandler implements Runnable {
             return map;
     }
     
+    // Helper to send a message to this client
+    private void sendMessageToClient(String message) {
+        out.println(message);
+    }
+    
     @Override
     public void run() {
         try (Connection conn = DriverManager.getConnection(dbUrl)) {
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             out = new PrintWriter(socket.getOutputStream(), true);
 
-            while (true) {
+            boolean authenticated = false;
+            String sessionID = null;
+
+            // 1. Require session validation or login/register before anything else
+            while (!authenticated) {
                 String line = in.readLine();
                 if (line == null) break;
+                Map<String, String> msg = parseMessage(line);
+                String type = msg.get("type");
 
-                // Expecting basic JSON-like format (manual parsing for now)
+                if ("session".equals(type)) {
+                    sessionID = msg.get("sessionID");
+                    if (sessionID != null && db.server.Utils.validateSession(sessionID)) {
+                        // Session valid, get username from session
+                        this.username = getUsernameFromSession(sessionID);
+                        clients.put(username, this);
+                        sendMessageToClient("session_ok");
+                        authenticated = true;
+                        System.out.println("[Server] " + username + " authenticated via session.");
+                    } else {
+                        sendMessageToClient("invalid_session");
+                        System.out.println("[Server] Invalid session attempt.");
+                    }
+                } else if ("login".equals(type)) {
+                    sessionID = handleLogin(msg);
+                    if (sessionID != null) {
+                        this.username = msg.get("username");
+                        clients.put(username, this);
+                        sendMessageToClient("login_ok,sessionID:" + sessionID);
+                        authenticated = true;
+                        System.out.println("[Server] " + username + " logged in.");
+                    } else {
+                        sendMessageToClient("login_failed");
+                        System.out.println("[Server] Login failed for user: " + msg.get("username"));
+                    }
+                } else if ("register".equals(type)) {
+                    boolean regOk = handleRegister(msg);
+                    if (regOk) {
+                        sendMessageToClient("register_ok");
+                        System.out.println("[Server] New user registered: " + msg.get("username"));
+                    } else {
+                        sendMessageToClient("register_failed");
+                        System.out.println("[Server] Registration failed for user: " + msg.get("username"));
+                    }
+                } else {
+                    sendMessageToClient("Please login, register, or provide a session.");
+                }
+            }
+
+            // 2. Authenticated: handle messages
+            while (authenticated) {
+                String line = in.readLine();
+                if (line == null) break;
                 Map<String, String> msg = parseMessage(line);
                 String type = msg.get("type");
 
                 switch (type) {
-                    case "register":
-                        handleRegister(msg);
-                        break;
-                    case "login":
-                        handleLogin(msg);
-                        break;
                     case "message":
                         handleMessage(msg);
                         break;
+                    case "logout":
+                        sendMessageToClient("logout_ok");
+                        System.out.println("[Server] " + username + " logged out.");
+                        authenticated = false;
+                        break;
                     default:
-                        out.println("Unknown command.");
+                        sendMessageToClient("Unknown command.");
+                        System.out.println("[Server] Unknown command from " + username + ": " + type);
                 }
             }
         } catch (Exception e) {
-            System.out.println("Error: " + e.getMessage());
+            System.out.println("[Server] Error: " + e.getMessage());
         } finally {
             if (username != null) {
                 clients.remove(username);
-                System.out.println(username + " disconnected.");
+                System.out.println("[Server] " + username + " disconnected.");
             }
+        }
+    }
+
+    // Helper to get username from sessionID
+    private String getUsernameFromSession(String sessionID) {
+        try {
+            return db.server.Utils.getUsernameBySession(sessionID);
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -80,7 +142,8 @@ public class ClientHandler implements Runnable {
         String encryptedMessage = msg.get("message");
 
         if (sessionID == null || targetUsername == null || encryptedMessage == null) {
-            out.println("Invalid message format.");
+            sendMessageToClient("Invalid message format.");
+            System.out.println("[Server] Invalid message format from " + username);
             return;
         }
 
@@ -88,23 +151,26 @@ public class ClientHandler implements Runnable {
         try {
             boolean validSession = db.server.Utils.validateSession(sessionID);
             if (!validSession) {
-                out.println("Invalid session.");
+                sendMessageToClient("Invalid session.");
+                System.out.println("[Server] Invalid session for message from " + username);
                 return;
             }
 
             ClientHandler targetHandler = clients.get(targetUsername);
             if (targetHandler != null) {
                 // Forward the encrypted message to the target user
-                targetHandler.out.println(username + ":" + encryptedMessage);
-                out.println("Message delivered.");
+                targetHandler.sendMessageToClient(username + ":" + encryptedMessage);
+                sendMessageToClient("Message delivered.");
+                System.out.println("[Server] Message from " + username + " delivered to " + targetUsername);
             } else {
-                out.println("User not online.");
+                sendMessageToClient("User not online.");
+                System.out.println("[Server] User " + targetUsername + " not online for message from " + username);
             }
         } catch (Exception e) {
-            out.println("Error handling message: " + e.getMessage());
+            sendMessageToClient("Error handling message: " + e.getMessage());
+            System.out.println("[Server] Error handling message from " + username + ": " + e.getMessage());
         }
     }
-
 
     private String handleLogin(Map<String, String> msg) {
         String username = msg.get("username");
@@ -126,13 +192,13 @@ public class ClientHandler implements Runnable {
         return null;
     }
 
-    private void handleRegister(Map<String, String> msg) {
+    private boolean handleRegister(Map<String, String> msg) {
         String username = msg.get("username");
         String password = msg.get("password");
 
         if (username == null || password == null) {
             out.println("Invalid registration data.");
-            return;
+            return false;
         }
 
         String[] passwordHashed = EncryptionUtils.passwordHashString(password);
@@ -140,11 +206,12 @@ public class ClientHandler implements Runnable {
         String passwordHashBase64 = passwordHashed[1];
         KeyPair publicKey = EncryptionUtils.generateKeyPair();
 
-        // Register
         try {
             db.server.Utils.registerUser(username, passwordHashBase64, saltBase64, publicKey.getPublic().toString());
+            return true;
         } catch (Exception e) {
             out.println("Error registering user: " + e.getMessage());
+            return false;
         }
     }
 

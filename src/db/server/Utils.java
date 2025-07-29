@@ -159,4 +159,12 @@ public class Utils {
             throw new Exception("Database error during public key retrieval.", e);
         }
     }
+
+    public static String getUsernameBySession(String sessionId) {
+        SessionInfo info = sessions.get(sessionId);
+        if (info != null && info.expiresAt > System.currentTimeMillis()) {
+            return info.username;
+        }
+        return null;
+    }
 }
