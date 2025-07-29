@@ -1,7 +1,14 @@
 package enc;
 import java.security.MessageDigest;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+
+import javax.crypto.Cipher;
+
+import java.security.KeyFactory;
 import java.security.KeyPair;
 
 public class EncryptionUtils {
@@ -49,6 +56,40 @@ public class EncryptionUtils {
             return keyGen.generateKeyPair();
         } catch (Exception e) {
             throw new RuntimeException("Error generating key pair", e);
+        }
+    }
+
+    public static String decryptWithPrivateKey(String encryptedMsg, PrivateKey privateKey) {
+        try {
+            // Decrypt the message using the private key
+            Cipher cipher = Cipher.getInstance("RSA");
+            cipher.init(Cipher.DECRYPT_MODE, privateKey);
+            byte[] decryptedBytes = cipher.doFinal(Base64.getDecoder().decode(encryptedMsg));
+            return new String(decryptedBytes, "UTF-8");
+        } catch (Exception e) {
+            throw new RuntimeException("Error decrypting message with private key", e);
+        }
+    }
+
+    public static PublicKey decodePublicKey(String pkBase64) {
+        try {
+            byte[] keyBytes = Base64.getDecoder().decode(pkBase64);
+            X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
+            KeyFactory kf = KeyFactory.getInstance("RSA");
+            return kf.generatePublic(spec);
+        } catch (Exception e) {
+            throw new RuntimeException("Error decoding public key", e);
+        }
+    }
+
+    public static String encryptWithPublicKey(String message, PublicKey targetPublicKey) {
+        try {
+            Cipher cipher = Cipher.getInstance("RSA");
+            cipher.init(Cipher.ENCRYPT_MODE, targetPublicKey);
+            byte[] encryptedBytes = cipher.doFinal(message.getBytes("UTF-8"));
+            return Base64.getEncoder().encodeToString(encryptedBytes);
+        } catch (Exception e) {
+            throw new RuntimeException("Error encrypting message with public key", e);
         }
     }
 }
