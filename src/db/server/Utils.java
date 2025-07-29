@@ -139,8 +139,8 @@ public class Utils {
     }
 
     public static String getPublicKeyIfSessionValid(String sessionId, String targetUsername) throws Exception {
-        String currentUser = validateSession(sessionId);
-        if (currentUser == null) {
+        boolean currentUser = validateSession(sessionId);
+        if (!currentUser) {
             throw new IllegalArgumentException("Invalid or expired session.");
         }
         String sql = "SELECT publickey FROM users WHERE username = ?";
