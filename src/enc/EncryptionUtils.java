@@ -1,3 +1,4 @@
+package enc;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -31,7 +32,16 @@ public class EncryptionUtils {
             throw new RuntimeException("Error hashing password", e);
         }
     }
-
+    public static String hashedPasswordWithSalt(String plainPassword, String salt) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(salt.getBytes("UTF-8"));
+            byte[] hashedPassword = md.digest(plainPassword.getBytes("UTF-8"));
+            return Base64.getEncoder().encodeToString(hashedPassword);
+        } catch (Exception e) {
+            throw new RuntimeException("Error hashing password with salt", e);
+        }
+    }
     public static KeyPair generateKeyPair() {
         try {
             java.security.KeyPairGenerator keyGen = java.security.KeyPairGenerator.getInstance("RSA");
