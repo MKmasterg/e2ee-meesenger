@@ -65,6 +65,25 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    private String handleGetKey(Map<String, String> msg) {
+        String sessionID = msg.get("sessionID");
+        String username = msg.get("username");
+        if (sessionID == null) {
+            out.println("Invalid session ID.");
+            return null;
+        }
+
+        try {
+            String publicKey = db.server.Utils.getPublicKeyIfSessionValid(sessionID, username);
+            if (publicKey != null) {
+                return publicKey;
+            } 
+        } catch (Exception e) {
+            out.println("Error retrieving public key: " + e.getMessage());
+        }
+        return null;
+    }
+
     private String handleLogin(Map<String, String> msg) {
         String username = msg.get("username");
         String password = msg.get("password");
@@ -75,7 +94,7 @@ public class ClientHandler implements Runnable {
         }
 
         String sessionID = null;
-        
+
         try {
             sessionID = db.server.Utils.loginUser(username, password);
             return sessionID;

@@ -138,10 +138,10 @@ public class Utils {
         return null;
     }
 
-    public static String getPublicKeyIfSessionValid(String sessionId, String targetUsername) {
+    public static String getPublicKeyIfSessionValid(String sessionId, String targetUsername) throws Exception {
         String currentUser = validateSession(sessionId);
         if (currentUser == null) {
-            return null;
+            throw new IllegalArgumentException("Invalid or expired session.");
         }
         String sql = "SELECT publickey FROM users WHERE username = ?";
         try (Connection conn = connect();
@@ -150,11 +150,13 @@ public class Utils {
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
                     return rs.getString("publickey");
+                } else {
+                    throw new IllegalArgumentException("Target user does not exist.");
                 }
             }
         } catch (SQLException e) {
             e.printStackTrace();
+            throw new Exception("Database error during public key retrieval.", e);
         }
-        return null;
     }
 }
