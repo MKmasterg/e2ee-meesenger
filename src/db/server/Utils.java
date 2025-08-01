@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Utils {
-    private static final String DB_URL = "jdbc:sqlite:e2ee-messenger.db";
+    private static final String DB_URL = "jdbc:sqlite:users.db";
     private static final long SESSION_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 
     // Simple session store: sessionId -> [username, expirationTime]
@@ -31,7 +31,8 @@ public class Utils {
                      "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                      "username TEXT UNIQUE NOT NULL," +
                      "password TEXT NOT NULL," +
-                     "info TEXT" +
+                     "salt TEXT NOT NULL," +
+                     "publickey TEXT NOT NULL" +
                      ");";
         try (Connection conn = connect();
              Statement stmt = conn.createStatement()) {
@@ -43,7 +44,7 @@ public class Utils {
 
     // Insert a new user with password hash (base64), salt (base64), and public key
     public static boolean addUser(String username, String passwordHashBase64, String saltBase64, String publicKeyBase64) {
-        String sql = "INSERT INTO users(username, passwordhashed, salt, publickey) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO users(username, password, salt, publickey) VALUES (?, ?, ?, ?)";
         try (Connection conn = connect();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, username);
@@ -93,23 +94,25 @@ public class Utils {
         if (stored == null) {
             throw new IllegalArgumentException("User not found.");
         }
-        String passwordHash = stored[0];
-        String salt = stored[1];
-        // Hash the provided password with the stored salt
-        String hashedInput = enc.EncryptionUtils.hashedPasswordWithSalt(password, salt);
-        if (hashedInput.equals(passwordHash)) {
+        String passwordHashBase64 = stored[0];
+        String saltBase64 = stored[1];
+        // Decode salt from base64
+        byte[] saltBytes = java.util.Base64.getDecoder().decode(saltBase64);
+        // Hash the provided password with the decoded salt
+        String hashedInputBase64 = enc.EncryptionUtils.hashedPasswordWithSalt(password, saltBytes);
+        if (hashedInputBase64.equals(passwordHashBase64)) {
             return createSession(username);
         }
         throw new IllegalArgumentException("Invalid password.");
     }
     public static String[] getPasswordAndSalt(String username) {
-        String sql = "SELECT passwordhashed, salt FROM users WHERE username = ?";
+        String sql = "SELECT password, salt FROM users WHERE username = ?";
         try (Connection conn = connect();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, username);
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    String passwordHash = rs.getString("passwordhashed");
+                    String passwordHash = rs.getString("password");
                     String salt = rs.getString("salt");
                     return new String[] { passwordHash, salt };
                 }
