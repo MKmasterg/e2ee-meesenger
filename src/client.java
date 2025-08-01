@@ -22,6 +22,9 @@ public class Client {
     private static String sessionID = null;
     private static String username = null;
     private static Map<String, PublicKey> userPublicKeys = new HashMap<>(); // Cache for public keys
+    private String line = null;
+    private static volatile String pendingSessionID = null;
+    private static volatile String pendingPublicKeyBase64 = null;
 
     // Save private key to file
     private static void savePrivateKeyToFile(String username, PrivateKey privateKey) throws Exception {
@@ -58,23 +61,50 @@ public class Client {
                 try {
                     String line;
                     while ((line = in.readLine()) != null) {
-                        // Try to decrypt if it's a message from another user
-                        if (line.contains(":")) {
-                            String[] parts = line.split(":", 2);
-                            String fromUser = parts[0];
-                            String encryptedMsg = parts[1];
-                            try {
-                                if (keyPair != null && keyPair.getPrivate() != null) {
-                                    String decrypted = EncryptionUtils.decryptWithPrivateKey(encryptedMsg, keyPair.getPrivate());
-                                    System.out.println("[Message from " + fromUser + "] " + decrypted);
-                                } else {
-                                    System.out.println("[Server] " + line);
+                        // Split type and payload
+                        String[] parts = line.split(":", 2);
+                        String type = parts[0];
+                        String payload = parts.length > 1 ? parts[1] : "";
+
+                        switch (type) {
+                            case "user_message":
+                                // Format: username:encryptedMessage
+                                String[] msgParts = payload.split(":", 2);
+                                if (msgParts.length == 2) {
+                                    String fromUser = msgParts[0];
+                                    String encryptedMsg = msgParts[1];
+                                    try {
+                                        if (keyPair != null && keyPair.getPrivate() != null) {
+                                            String decrypted = EncryptionUtils.decryptWithPrivateKey(encryptedMsg, keyPair.getPrivate());
+                                            System.out.println("[Message from " + fromUser + "] " + decrypted);
+                                        } else {
+                                            System.out.println("[Message from " + fromUser + "] (Cannot decrypt)");
+                                        }
+                                    } catch (Exception ex) {
+                                        System.out.println("[Message from " + fromUser + "] (Decryption failed) : " + ex.getMessage());
+                                    }
                                 }
-                            } catch (Exception ex) {
+                                break;
+                            case "server_response":
+                                System.out.println("[Server] " + payload);
+                                if (payload.startsWith("login_ok,sessionID:")) {
+                                    synchronized (Client.class) {
+                                        pendingSessionID = payload.split("sessionID:")[1];
+                                        Client.class.notifyAll();
+                                    }
+                                } else if (payload.startsWith("fetch_ok,publicKey:")) {
+                                    synchronized (Client.class) {
+                                        String[] pkParts = payload.split("publicKey:");
+                                        if (pkParts.length > 1) {
+                                            pendingPublicKeyBase64 = pkParts[1].trim();
+                                            Client.class.notifyAll();
+                                        }
+                                    }
+                                }
+                                break;
+                            default:
                                 System.out.println("[Server] " + line);
-                            }
-                        } else {
-                            System.out.println("[Server] " + line);
+                                break;
                         }
                     }
                 } catch (Exception e) {
@@ -132,11 +162,13 @@ public class Client {
                     String loginMsg = String.format("type:login,username:%s,password:%s", username, password);
                     out.println(loginMsg);
 
-                    // Wait for sessionID from server
-                    String response = in.readLine();
-                    System.out.println("[Server] " + response);
-                    if (response != null && response.startsWith("login_ok,sessionID:")) {
-                        sessionID = response.split("sessionID:")[1];
+                    // Wait for sessionID from listener
+                    synchronized (Client.class) {
+                        while (pendingSessionID == null) {
+                            Client.class.wait();
+                        }
+                        sessionID = pendingSessionID;
+                        pendingSessionID = null;
                         System.out.println("[Client] SessionID set.");
                     }
 
@@ -154,17 +186,17 @@ public class Client {
                     // Get target user's public key (in a real app, fetch from server or cache)
                     PublicKey targetPublicKey = userPublicKeys.get(targetUser);
                     if (targetPublicKey == null) {
-                        // Ask server for public key (protocol extension)
                         System.out.println("[Client] Fetching public key for " + targetUser + "...");
+                        pendingPublicKeyBase64 = null;
                         out.println("type:get_public_key,username:" + targetUser);
-                        String pkResponse = in.readLine();
-                        if (pkResponse != null && pkResponse.startsWith("publicKey:")) {
-                            String pkBase64 = pkResponse.split("publicKey:")[1];
+                        synchronized (Client.class) {
+                            while (pendingPublicKeyBase64 == null) {
+                                Client.class.wait();
+                            }
+                            String pkBase64 = pendingPublicKeyBase64;
+                            pendingPublicKeyBase64 = null;
                             targetPublicKey = EncryptionUtils.decodePublicKey(pkBase64);
                             userPublicKeys.put(targetUser, targetPublicKey);
-                        } else {
-                            System.out.println("[Client] Could not get public key for " + targetUser);
-                            continue;
                         }
                     }
 
