@@ -39,10 +39,10 @@ public class EncryptionUtils {
             throw new RuntimeException("Error hashing password", e);
         }
     }
-    public static String hashedPasswordWithSalt(String plainPassword, String salt) {
+    public static String hashedPasswordWithSalt(String plainPassword, byte[] salt) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            md.update(salt.getBytes("UTF-8"));
+            md.update(salt);
             byte[] hashedPassword = md.digest(plainPassword.getBytes("UTF-8"));
             return Base64.getEncoder().encodeToString(hashedPassword);
         } catch (Exception e) {
@@ -59,12 +59,13 @@ public class EncryptionUtils {
         }
     }
 
-    public static String decryptWithPrivateKey(String encryptedMsg, PrivateKey privateKey) {
+    public static String decryptWithPrivateKey(String encryptedMsgBase64, PrivateKey privateKey) {
         try {
             // Decrypt the message using the private key
             Cipher cipher = Cipher.getInstance("RSA");
             cipher.init(Cipher.DECRYPT_MODE, privateKey);
-            byte[] decryptedBytes = cipher.doFinal(Base64.getDecoder().decode(encryptedMsg));
+            byte[] encryptedMsg = Base64.getDecoder().decode(encryptedMsgBase64);
+            byte[] decryptedBytes = cipher.doFinal(encryptedMsg);
             return new String(decryptedBytes, "UTF-8");
         } catch (Exception e) {
             throw new RuntimeException("Error decrypting message with private key", e);
